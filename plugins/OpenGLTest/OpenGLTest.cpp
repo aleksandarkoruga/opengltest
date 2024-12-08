@@ -6,51 +6,15 @@
 
 static InterfaceTable* ft;
 
-static const struct
-{
-	float x, y;
-	float r, g, b;
-} vertices[3] =
-{
-	{ -0.6f, -0.4f, 1.f, 0.f, 0.f },
-	{  0.6f, -0.4f, 0.f, 1.f, 0.f },
-	{   0.f,  0.6f, 0.f, 0.f, 1.f }
-};
-
-static const char* vertex_shader_text =
-"#version 110\n"
-"uniform mat4 MVP;\n"
-"attribute vec3 vCol;\n"
-"attribute vec2 vPos;\n"
-"varying vec3 color;\n"
-"void main()\n"
-"{\n"
-"    gl_Position = MVP * vec4(vPos, 0.0, 1.0);\n"
-"    color = vCol;\n"
-"}\n";
-
-static const char* fragment_shader_text =
-"#version 110\n"
-"varying vec3 color;\n"
-"void main()\n"
-"{\n"
-"    gl_FragColor = vec4(color, 1.0);\n"
-"}\n";
-
-
-static void error_callback(int error, const char* description)
-{
-	fprintf(stderr, "Error: %s\n", description);
-}
 
 namespace OpenGLTest {
 
-	OpenGLTest::OpenGLTest() : m_engine(), m_pWindow(nullptr), m_samps(0ULL),m_prevFrame(0ULL) 
+	OpenGLTest::OpenGLTest() : m_buf(mWorld->mBufLength*32,0.f) , m_cpyIdx(0), m_engine()//, m_pWindow(nullptr), m_samps(0ULL),m_prevFrame(0ULL) 
 	{
 		
 		mCalcFunc = make_calc_function<OpenGLTest, &OpenGLTest::next>();
 		next(1);
-
+		/*
 		glfwSetErrorCallback(error_callback);
 
 		if(glfwInit())
@@ -99,16 +63,16 @@ namespace OpenGLTest {
 
 
 			}
-		}
+		}*/
 
 	}
 
 	OpenGLTest::~OpenGLTest()
 	{
-		if(m_pWindow)
-			glfwDestroyWindow(m_pWindow);
+		//if(m_pWindow)
+		//	glfwDestroyWindow(m_pWindow);
 
-		glfwTerminate();
+		//glfwTerminate();
 	}
 
 void OpenGLTest::next(int nSamples) {
@@ -116,10 +80,16 @@ void OpenGLTest::next(int nSamples) {
     const float* gain = in(1);
     float* outbuf = out(0);
 
+	memcpy(m_buf.data() + nSamples * m_cpyIdx, input, sizeof(float) * nSamples);
+	++m_cpyIdx;
+	m_cpyIdx &= 31;
+
+	m_engine.SetData(m_buf.data(), m_buf.size());
+
     // simple gain function
     for (int i = 0; i < nSamples; ++i) {
 
-		++m_samps;
+		/*++m_samps;
 		auto nFrame = static_cast<uint64_t>( 30.0 * static_cast<double>( m_samps) / sampleRate());
 
 		if (nFrame != m_prevFrame)
@@ -151,7 +121,7 @@ void OpenGLTest::next(int nSamples) {
 			m_prevFrame = nFrame;
 
 		}
-
+		*/
         outbuf[i] = input[i] * gain[i];
     }
 }

@@ -18,14 +18,15 @@ public:
 private:
     // Calc function
     void next(int nSamples);
-	GLFWwindow* m_pWindow;
+	/*GLFWwindow* m_pWindow;
 	uint64_t m_samps;
 	uint64_t m_prevFrame;
 	
     GLuint vertex_buffer, vertex_shader, fragment_shader, program;
     GLint mvp_location, vpos_location, vcol_location;
-    GLuint frameBuffer;
-
+    GLuint frameBuffer;*/
+    std::vector<float> m_buf;
+    int m_cpyIdx;
     scGraphics::GraphicsEngine m_engine;
  
     // Member variables
