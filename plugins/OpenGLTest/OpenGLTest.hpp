@@ -27,8 +27,9 @@ private:
     GLuint frameBuffer;*/
     std::vector<float> m_buf;
     int m_cpyIdx;
-    scGraphics::GraphicsEngine m_engine;
- 
+    std::unique_ptr< scGraphics::GraphicsEngine> m_engine;
+    
+    int m_width, m_height;
     // Member variables
 };
 

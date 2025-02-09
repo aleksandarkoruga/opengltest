@@ -4,6 +4,12 @@
 #include <thread>
 #include <chrono>
 #include <atomic>
+
+//#define TEXTURE_X 1080
+//#define TEXTURE_Y 1080
+
+
+
 namespace scGraphics{
 
 	struct Vertex
@@ -19,7 +25,7 @@ namespace scGraphics{
 	class Shader
 	{
 	public:
-		Shader() ;
+		Shader(std::string shaderFolderPath) ;
 		~Shader();
 
 		inline GLuint& GetVertexBuffer() { return m_vertexBuffer; };
@@ -36,15 +42,38 @@ namespace scGraphics{
 		{
 			return m_shaderProgram;
 		};
+		inline GLuint& GetPostProcessShaderProgram()
+		{
+			return m_shaderPostProgram;
+		};
 		void CommitData();
+		void ReleaseResources()
+		{
+			if(GetShaderProgram())
+				glDeleteProgram(GetShaderProgram());
+			if (m_vertexShader)
+				glDeleteShader(m_vertexShader);
+			if (m_fragmentShader)
+			glDeleteShader(m_fragmentShader);
+
+
+			if (GetPostProcessShaderProgram())
+				glDeleteProgram(GetPostProcessShaderProgram());
+			if (m_vertexPostShader)
+				glDeleteShader(m_vertexPostShader);
+			if (m_fragmentShader)
+				glDeleteShader(m_fragmentPostShader);
+		
+		
+		}
 	private:
 		void Shader::UploadSSBOData(const std::vector<float>& data);
 		void Shader::UploadSSBOData(const float* data, const int size);
 
 
-		bool CompileVertexShader();
-		bool CompileFragmentShader();
-		void CompileProgram();
+		bool CompileVertexShader(std::string& text, GLuint& vert);
+		bool CompileFragmentShader(std::string& text, GLuint& vert);
+		void CompileProgram(GLuint& program, GLuint& vert, GLuint& frag);
 		void ReleaseShader();
 		std::string readShaderFile(const std::string& fileName);
 		//void ExchangeVertexShader();
@@ -57,11 +86,21 @@ namespace scGraphics{
 		std::vector<Index> m_indices;
 		GLuint m_ssbo;
 		GLuint m_vertexBuffer;
+
 		GLuint m_vertexShader;
 		GLuint m_fragmentShader;
 		GLuint m_shaderProgram;	
+
+		GLuint m_vertexPostShader;
+		GLuint m_fragmentPostShader;
+		GLuint m_shaderPostProgram;
+
 		std::string m_vertexShaderText;
 		std::string m_fragmentShaderText;
+
+		std::string m_vertexShaderPostText;
+		std::string m_fragmentShaderPostText;
+
 		std::vector<float> m_data;
 
 	};
@@ -69,15 +108,23 @@ namespace scGraphics{
 
 class GraphicsEngine{
 public:
-	GraphicsEngine();
+	GraphicsEngine(std::string shaderFolderPath, int widthBackBuffer, int heightBackBuffer);
 	~GraphicsEngine();
 	void RunEngine();
 	void CalculateOneFrame();
+	void SwapFBO();
 	void SetData(const float* buf, int nSamples);
+	const std::vector<float>& GetPixels() { return m_arrPixels; };
+	const bool IsPixReady() { return m_bPixReady; };
 private:
 	bool InitEngine();
+	void TerminateEngine();
 
 protected:
+
+	std::string m_path;
+	int m_width;
+	int m_height;
 
 	enum class PROGRAM_STATE { START, RUN, TERMINATE };
 	std::atomic<PROGRAM_STATE> m_programState;
@@ -87,11 +134,11 @@ protected:
 	GLFWwindow* m_pWindow;
 
 	
-	GLint m_mvpLocation;
+//	GLint m_mvpLocation;
 	GLint m_vPosLocation;
 	//GLint m_vColLocation;
 
-	GLuint m_frameBuffer;
+	
 
 	std::unique_ptr<Shader> m_shader;
 	enum class MEMSTATE {READY,FINISHED};
@@ -99,6 +146,14 @@ protected:
 	
 	unsigned int m_VBO, m_VAO, m_EBO;
 	
+	std::vector<GLuint> m_frameBufferSwap;
+	std::vector<GLuint> m_textures;
+	bool m_bCurrentSwap; 
+
+	std::vector<float> m_arrPixels;
+	bool m_bPixReady;
+	//std::pair<GLuint, GLuint> m_frameBufferSwap;
+	//std::pair<GLuint, GLuint> m_textures; //output tex
 };
 
 } //namespace scGraphics

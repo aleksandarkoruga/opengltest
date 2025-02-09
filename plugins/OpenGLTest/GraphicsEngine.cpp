@@ -46,25 +46,40 @@ namespace scGraphics{
 
 
 
-	GraphicsEngine::GraphicsEngine() : 
+	GraphicsEngine::GraphicsEngine(std::string shaderFolderPath, int widthBackBuffer, int heightBackBuffer) :
+		m_width(widthBackBuffer),
+		m_height(heightBackBuffer),
+		m_path(shaderFolderPath),
 		m_programState({ PROGRAM_STATE::START }),
 		m_graphicsThread(&GraphicsEngine::RunEngine,this),
 		m_pWindow(nullptr),
-		m_mvpLocation(0),
+		//m_mvpLocation(0),
 		m_vPosLocation(0),
 		//m_vColLocation(0),
-		m_frameBuffer(0),
 		m_shader(nullptr),
-		m_bSSBO({MEMSTATE::FINISHED})
+		m_bSSBO({MEMSTATE::FINISHED}),
+		m_VBO(0),
+		m_VAO(0),
+		m_EBO(0),
+		m_frameBufferSwap({ (GLuint)0U, (GLuint)0U }),
+		m_textures({ (GLuint)0U, (GLuint)0U }),
+		m_bCurrentSwap(false),
+		m_arrPixels(std::vector<float>(widthBackBuffer* heightBackBuffer * 4,0)),
+		m_bPixReady(false)
+
+		
 	{
 	}
 
 	GraphicsEngine::~GraphicsEngine()
 	{
 		m_programState.store(PROGRAM_STATE::TERMINATE);
-		std::this_thread::sleep_for(std::chrono::milliseconds(5));
-		m_graphicsThread.join();
+		std::this_thread::sleep_for(std::chrono::milliseconds(60));
+
 		
+		m_graphicsThread.join();
+
+
 		if (m_pWindow)
 			glfwDestroyWindow(m_pWindow);
 		glfwTerminate();
@@ -96,72 +111,176 @@ namespace scGraphics{
 			else
 				break;
 		}
+
+		TerminateEngine();
+		
+
+
 	}
 	void GraphicsEngine::CalculateOneFrame()
 	{
 		if (m_pWindow && (!glfwWindowShouldClose(m_pWindow)) )
 		{
 			float ratio;
-			int width, height;
-			mat4x4 m, p, mvp;
+			//int width= TEXTURE_X, height= TEXTURE_Y;
+			
 
 			checkOpenGLError();
 
-			glfwGetFramebufferSize(m_pWindow, &width, &height);
+
+			
+			//START RENDER TO SWAP FRAMEBUFFER
+
+			glBindFramebuffer(GL_FRAMEBUFFER, m_frameBufferSwap[(int)m_bCurrentSwap]);
+			if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
+				std::cout << "Framebuffer is not complete!" << std::endl;
+				return;
+			}
 
 			checkOpenGLError();
 
-			ratio = width / (float)height;
+			ratio = m_width / (float)m_height;
 
-			glViewport(0, 0, width, height);
+			glViewport(0, 0, m_width, m_height);
 
 			checkOpenGLError();
-
+			glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
 			glClear(GL_COLOR_BUFFER_BIT);
 
 			checkOpenGLError();
 
-			mat4x4_identity(m);
+			//mat4x4_identity(m);
 			//mat4x4_rotate_Z(m, m, (float)glfwGetTime());
-			mat4x4_ortho(p, -ratio, ratio, -1.f, 1.f, 1.f, -1.f);
-			mat4x4_mul(mvp, p, m);
-
-			checkOpenGLError();
-
+			//mat4x4_ortho(p, -ratio, ratio, -1.f, 1.f, 1.f, -1.f);
+			//mat4x4_mul(mvp, p, m);
 
 			checkOpenGLError();
 
 			glUseProgram(m_shader->GetShaderProgram());
 
+
+			//push previous frame
+			glActiveTexture(GL_TEXTURE4);
+			glBindTexture(GL_TEXTURE_2D,m_textures[(int)(!m_bCurrentSwap)]);
+			glUniform1i(glGetUniformLocation(m_shader->GetShaderProgram(), "previousFrame"), 4);
+			
+			//push the frame before the previous
+			glActiveTexture(GL_TEXTURE5);
+			glBindTexture(GL_TEXTURE_2D, m_textures[(int)(m_bCurrentSwap)]);
+			glUniform1i(glGetUniformLocation(m_shader->GetShaderProgram(), "previousFrame2"), 5);
+			
+			
+			//push to shader
+
 			GLint resolutionLocation = glGetUniformLocation(m_shader->GetShaderProgram(), "resolution");
-			glUniform2f(resolutionLocation, static_cast<float>(width), static_cast<float>(height)  );
+			glUniform2f(resolutionLocation, static_cast<float>(m_width), static_cast<float>(m_height)  );
 
 			if(m_bSSBO.load() == MEMSTATE::READY)
 				m_shader->CommitData();
 
 			checkOpenGLError();
-			glUniformMatrix4fv(m_mvpLocation, 1, GL_FALSE, (const GLfloat*)mvp);
-			checkOpenGLError();
+			//glUniformMatrix4fv(m_mvpLocation, 1, GL_FALSE, (const GLfloat*)mvp);
+			//checkOpenGLError();
 
 			glBindVertexArray(m_VAO);
 
 			//glBindVertexArray(m_vaoIdpos); 
 			glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
 
+			glReadBuffer(GL_COLOR_ATTACHMENT0); // Ensure we read from color attachment 0
+			glReadPixels(
+				0, 0,                     // Start position (lower-left corner)
+				m_width, m_height,     // Dimensions
+				GL_RGBA,                  // Format
+				GL_FLOAT,                 // Type
+				m_arrPixels.data()          // Destination buffer
+			);
+			m_bPixReady = true;
 			checkOpenGLError();
 
 			glBindVertexArray(0);
 
+			// END RENDER TO SWAP FRAMEBUFFER
+
+
+			
+
+			//START RENDER TO WINDOW
+			glBindFramebuffer(GL_FRAMEBUFFER, 0);  // Bind the default framebuffer (window)
+			glClear(GL_COLOR_BUFFER_BIT);          // Clear the window's framebuffer
+
+
+			int width, height;
+			glfwGetFramebufferSize(m_pWindow, &width, &height);
+
+			glViewport(0, 0, width, height);
+
+
+			float winAspect = (float)width / (float)height;
+
+			mat4x4 p, mvp;
+
+			// Create an identity matrix
+			mat4x4_identity(mvp);
+
+			// Adjust scaling based on window aspect ratio
+			if (winAspect > 1.0f) {
+				// Wider window: squish X to preserve 1:1 aspect ratio
+				mat4x4_scale_aniso(mvp, mvp, 1.0f / winAspect, 1.0f, 1.0f);
+			}
+			else {
+				// Taller window: squish Y to preserve 1:1 aspect ratio
+				mat4x4_scale_aniso(mvp, mvp, 1.0f, winAspect, 1.0f);
+			}
+
+			// Use a fixed orthographic projection (covers [-1, 1] in both axes)
+			mat4x4_ortho(p, -1.0f, 1.0f, -1.0f, 1.0f, -1.0f, 1.0f);
+			mat4x4_mul(mvp, p, mvp); // Combine projection and scaling
+
+
+			// Use the post-processing shader program
+			glUseProgram(m_shader->GetPostProcessShaderProgram());
+
+			// Pass the updated MVP matrix to the shader
+			GLint mvpLocation = glGetUniformLocation(m_shader->GetPostProcessShaderProgram(), "MVP");
+			glUniformMatrix4fv(mvpLocation, 1, GL_FALSE, (const GLfloat*)mvp);
+
+
+
+
+			// Bind the texture from the swap framebuffer
+			glActiveTexture(GL_TEXTURE4);
+			glBindTexture(GL_TEXTURE_2D, m_textures[(int)m_bCurrentSwap]);
+			
+			// Set resolution for the window
+			glUniform2f(resolutionLocation, static_cast<float>(width), static_cast<float>(height));
+
+			// Render the quad with the texture to the window (default framebuffer)
+			glBindVertexArray(m_VAO);
+			glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+
+			checkOpenGLError();
+
+			glBindVertexArray(0);
+			//END RENDER TO WINDOW
 			glfwSwapBuffers(m_pWindow);
 			glfwPollEvents();
 
 			checkOpenGLError();
 
-
+			SwapFBO();
 			m_bSSBO.store(MEMSTATE::FINISHED);
 		}
 		
 	}
+
+	void GraphicsEngine::SwapFBO()
+	{
+		m_bCurrentSwap = !m_bCurrentSwap;
+		//m_frameBufferSwap = { m_frameBufferSwap.second, m_frameBufferSwap.first }; //swap buffers
+		//m_textures = { m_textures.second, m_textures.first };
+	}
+
 	void GraphicsEngine::SetData(const float* buf, int nSamples)
 	{
 		if (m_bSSBO.load() == MEMSTATE::FINISHED && m_shader!=nullptr && m_programState.load()==PROGRAM_STATE::RUN)
@@ -199,7 +318,15 @@ namespace scGraphics{
 
 				checkOpenGLError();
 
-				m_shader = std::make_unique<Shader>();
+				const char* renderer = (const char*)glGetString(GL_RENDERER);
+				const char* vendor = (const char*)glGetString(GL_VENDOR);
+				const char* version = (const char*)glGetString(GL_VERSION);
+
+				std::cout << "GPU Vendor: " << vendor << std::endl;
+				std::cout << "GPU Renderer: " << renderer << std::endl;
+				std::cout << "OpenGL Version: " << version << std::endl;
+
+				m_shader = std::make_unique<Shader>(m_path);
 
 				checkOpenGLError();
 
@@ -207,7 +334,7 @@ namespace scGraphics{
 
 				checkOpenGLError();
 
-				m_mvpLocation = m_shader->GetUniformLocation("MVP");
+				//m_mvpLocation = m_shader->GetUniformLocation("MVP");
 				
 				m_vPosLocation = m_shader->GetAttribLocation("vPos");
 				checkOpenGLError();
@@ -217,7 +344,61 @@ namespace scGraphics{
 				
 
 				//////////
+				//output framebuffer 
 
+				//textures for feedback 
+
+				glGenFramebuffers(2, m_frameBufferSwap.data());
+				glGenTextures(2, m_textures.data());
+
+
+				glBindFramebuffer(GL_FRAMEBUFFER, m_frameBufferSwap[0]);
+				glBindTexture(GL_TEXTURE_2D, m_textures[0]);
+
+				glTexImage2D(
+					GL_TEXTURE_2D,
+					0,
+					GL_RGBA32F,          // Internal format: 32-bit float per channel
+					m_width,
+					m_height,
+					0,
+					GL_RGBA,             // Format: RGBA components
+					GL_FLOAT,            // Type: Floating-point data
+					nullptr              // No initial data
+				);
+
+				//glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, TEXTURE_X, TEXTURE_Y, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
+				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+				glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, m_textures[0], 0);
+
+				
+				
+				glBindFramebuffer(GL_FRAMEBUFFER, m_frameBufferSwap[1]);
+				glBindTexture(GL_TEXTURE_2D, m_textures[1]);
+				glTexImage2D(
+					GL_TEXTURE_2D,
+					0,
+					GL_RGBA32F,          // Internal format: 32-bit float per channel
+					m_width,
+					m_height,
+					0,
+					GL_RGBA,             // Format: RGBA components
+					GL_FLOAT,            // Type: Floating-point data
+					nullptr              // No initial data
+				);
+
+				//glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, TEXTURE_X, TEXTURE_Y, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
+				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);				
+				glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, m_textures[1], 0);
+				
+				if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
+					std::cout << "Framebuffer is not complete!" << std::endl;
+					return -1;
+				}
+
+				//
 				
 				glGenVertexArrays(1, &m_VAO);
 				glGenBuffers(1, &m_VBO);
@@ -263,15 +444,51 @@ namespace scGraphics{
 		return false;
 	}
 
-	Shader::Shader() :m_data({})
+	void GraphicsEngine::TerminateEngine()
+	{
+		//TERMINATE CALLED DELETE RESOURCES ON GRAPHICS THREAD
+		/*
+		for (auto frameBuffer : m_frameBufferSwap)
+			if (glIsFramebuffer(frameBuffer)) {
+				std::cout << "valid framebuffer: " << frameBuffer << std::endl;
+			}
+		*/
+		glDeleteFramebuffers(2, &m_frameBufferSwap[0]);
+
+		/*
+		for (auto tex : m_textures)
+			if (glIsTexture(tex)) {
+				std::cout << "valid texture: " << tex << std::endl;
+			}
+		*/
+		glDeleteTextures(2, &m_textures[0]);
+
+		m_shader->ReleaseResources();
+		if (m_VBO && glIsBuffer(m_VBO))
+			glDeleteBuffers(1, &m_VBO);
+		if (m_VAO && glIsVertexArray(m_VAO))
+			glDeleteBuffers(1, &m_VAO);
+		if (m_EBO && glIsBuffer(m_EBO))
+			glDeleteBuffers(1, &m_EBO);
+	
+	
+	}
+
+	Shader::Shader(std::string shaderFolderPath) :m_data({})
 	{
 		//std::filesystem::path cwd = std::filesystem::current_path();
 		//std::cout << cwd;
-		const std::string vertFName = "shader.vert";
-		const std::string fragFName = "shader.frag";
+		const std::string vertFName = shaderFolderPath +"shader.vert";
+		const std::string fragFName = shaderFolderPath +"shader.frag";
+
+		const std::string vertPostFName = shaderFolderPath + "post.vert";
+		const std::string fragPostFName = shaderFolderPath + "post.frag";
 
 		m_vertexShaderText = readShaderFile(vertFName);
 		m_fragmentShaderText = readShaderFile(fragFName);
+
+		m_vertexShaderPostText = readShaderFile(vertPostFName);
+		m_fragmentShaderPostText = readShaderFile(fragPostFName);
 		/*m_vertices =
 		{
 			// First triangle
@@ -286,10 +503,10 @@ namespace scGraphics{
 		};
 		*/
 		m_vertices = {
-			{0.5f,  0.5f, 0.0f},  // top right
-			{0.5f, -0.5f, 0.0f },  // bottom right
-			{-0.5f, -0.5f, 0.0f},  // bottom left
-			{-0.5f,  0.5f, 0.0f}   // top left 
+						{1.0f,  1.0f, 0.0f},  // top right
+						{1.0f, -1.0f, 0.0f },  // bottom right
+						{-1.0f, -1.0f, 0.0f},  // bottom left
+						{-1.0f,  1.0f, 0.0f}   // top left 
 		};
 
 		m_indices = {  // note that we start from 0!
@@ -303,6 +520,8 @@ namespace scGraphics{
 
 		m_vertexShader  = glCreateShader(GL_VERTEX_SHADER);
 		m_fragmentShader= glCreateShader(GL_FRAGMENT_SHADER);
+		m_vertexPostShader = glCreateShader(GL_VERTEX_SHADER);
+		m_fragmentPostShader = glCreateShader(GL_FRAGMENT_SHADER);
 		m_shaderProgram = 0;
 
 
@@ -330,32 +549,39 @@ namespace scGraphics{
 
 	void Shader::Compile()
 	{
-		CompileVertexShader();
+		CompileVertexShader(m_vertexShaderText, m_vertexShader);
 		checkOpenGLError();
-		CompileFragmentShader();
+		CompileFragmentShader(m_fragmentShaderText, m_fragmentShader);
 		checkOpenGLError();
-		CompileProgram();
+		CompileProgram(m_shaderProgram, m_vertexShader, m_fragmentShader );
+		checkOpenGLError();
+
+		CompileVertexShader(m_vertexShaderPostText, m_vertexPostShader);
+		checkOpenGLError();
+		CompileFragmentShader(m_fragmentShaderPostText, m_fragmentPostShader);
+		checkOpenGLError();
+		CompileProgram(m_shaderPostProgram, m_vertexPostShader, m_fragmentPostShader);
 		checkOpenGLError();
 
 	}
 
-	bool Shader::CompileVertexShader()
+	bool Shader::CompileVertexShader(std::string& text, GLuint& vert)
 	{
-		const char* str = m_vertexShaderText.c_str();
-		glShaderSource(m_vertexShader, 1, &str, NULL);
-		glCompileShader(m_vertexShader);
+		const char* str = text.c_str();
+		glShaderSource(vert, 1, &str, NULL);
+		glCompileShader(vert);
 
 		GLint compileStatus;
-		glGetShaderiv(m_vertexShader, GL_COMPILE_STATUS, &compileStatus);
+		glGetShaderiv(vert, GL_COMPILE_STATUS, &compileStatus);
 
 		if (compileStatus != GL_TRUE)
 		{
 			GLint logLength = 0;
-			glGetShaderiv(m_vertexShader, GL_INFO_LOG_LENGTH, &logLength);
+			glGetShaderiv(vert, GL_INFO_LOG_LENGTH, &logLength);
 
 			// Retrieve the error log
 			std::vector<GLchar> errorLog(logLength);
-			glGetShaderInfoLog(m_vertexShader, logLength, nullptr, errorLog.data());
+			glGetShaderInfoLog(vert, logLength, nullptr, errorLog.data());
 			std::string str(errorLog.begin(), errorLog.end());
 			std::cout << "vertex shader failed to compile " << str;
 		}
@@ -363,23 +589,23 @@ namespace scGraphics{
 		return compileStatus == GL_TRUE;
 	}
 
-	bool Shader::CompileFragmentShader()
+	bool Shader::CompileFragmentShader(std::string& text, GLuint& frag)
 	{
-		const char* str = m_fragmentShaderText.c_str();
-		glShaderSource(m_fragmentShader, 1, &str, NULL);
-		glCompileShader(m_fragmentShader);
+		const char* str = text.c_str();
+		glShaderSource(frag, 1, &str, NULL);
+		glCompileShader(frag);
 
 		GLint compileStatus;
-		glGetShaderiv(m_fragmentShader, GL_COMPILE_STATUS, &compileStatus);
+		glGetShaderiv(frag, GL_COMPILE_STATUS, &compileStatus);
 
 		if (compileStatus != GL_TRUE)
 		{
 			GLint logLength = 0;
-			glGetShaderiv(m_fragmentShader, GL_INFO_LOG_LENGTH, &logLength);
+			glGetShaderiv(frag, GL_INFO_LOG_LENGTH, &logLength);
 
 			// Retrieve the error log
 			std::vector<GLchar> errorLog(logLength);
-			glGetShaderInfoLog(m_fragmentShader, logLength, nullptr, errorLog.data());
+			glGetShaderInfoLog(frag, logLength, nullptr, errorLog.data());
 			std::string str(errorLog.begin(), errorLog.end());
 			std::cout<< "fragment shader failed to compile"<< str;;
 		}
@@ -388,24 +614,24 @@ namespace scGraphics{
 		return compileStatus == GL_TRUE;
 	}
 
-	void Shader::CompileProgram()
+	void Shader::CompileProgram(GLuint& program, GLuint& vert, GLuint& frag)
 	{
-		m_shaderProgram = glCreateProgram();
-		glAttachShader(m_shaderProgram, m_vertexShader);
-		glAttachShader(m_shaderProgram, m_fragmentShader);
-		glLinkProgram(m_shaderProgram);
+		program = glCreateProgram();
+		glAttachShader(program, vert);
+		glAttachShader(program, frag);
+		glLinkProgram(program);
 
 		GLint linkStatus;
-		glGetProgramiv(m_shaderProgram, GL_LINK_STATUS, &linkStatus);
+		glGetProgramiv(program, GL_LINK_STATUS, &linkStatus);
 
 		if (linkStatus != GL_TRUE) {
 			// Program linking failed, get the error log
 			GLint logLength = 0;
-			glGetProgramiv(m_shaderProgram, GL_INFO_LOG_LENGTH, &logLength);
+			glGetProgramiv(program, GL_INFO_LOG_LENGTH, &logLength);
 
 			if (logLength > 0) {
 				std::vector<char> infoLog(logLength);
-				glGetProgramInfoLog(m_shaderProgram, logLength, nullptr, infoLog.data());
+				glGetProgramInfoLog(program, logLength, nullptr, infoLog.data());
 				std::cout << "Shader program linking failed:\n" << infoLog.data() << std::endl;
 			}
 			else {

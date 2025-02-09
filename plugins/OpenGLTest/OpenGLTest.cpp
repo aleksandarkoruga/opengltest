@@ -9,9 +9,24 @@ static InterfaceTable* ft;
 
 namespace OpenGLTest {
 
-	OpenGLTest::OpenGLTest() : m_buf(mWorld->mBufLength*32,0.f) , m_cpyIdx(0), m_engine()//, m_pWindow(nullptr), m_samps(0ULL),m_prevFrame(0ULL) 
-	{
+	OpenGLTest::OpenGLTest() :
+		m_buf(mWorld->mBufLength*32,0.f) ,
+		m_cpyIdx(0),
+		m_engine(nullptr),
+		m_width(512), 
+		m_height(512)
 		
+		//, m_pWindow(nullptr), m_samps(0ULL),m_prevFrame(0ULL) 
+	{
+
+		int filename_length = in0(4);
+		//std::cout << filename_length << std::endl;
+		// char path[filename_length];
+		auto path = std::string(filename_length, '!');
+		for (int i = 0; i < filename_length; i++) {
+			path[i] = static_cast<char>(in0(i + 1 + 4));
+		}
+		m_engine= std::make_unique<scGraphics::GraphicsEngine>(path, m_width, m_height);
 		mCalcFunc = make_calc_function<OpenGLTest, &OpenGLTest::next>();
 		next(1);
 		/*
@@ -77,52 +92,40 @@ namespace OpenGLTest {
 
 void OpenGLTest::next(int nSamples) {
     const float* input = in(0);
-    const float* gain = in(1);
+	const float* gain = in(1);
+	const float* pix_x = in(2);
+	const float* pix_y = in(3);
+
+
     float* outbuf = out(0);
 
 	memcpy(m_buf.data() + nSamples * m_cpyIdx, input, sizeof(float) * nSamples);
 	++m_cpyIdx;
 	m_cpyIdx &= 31;
 
-	m_engine.SetData(m_buf.data(), m_buf.size());
+	m_engine->SetData(m_buf.data(), m_buf.size());
 
     // simple gain function
+
+
+	const float* pixels = nullptr;
+	
+	if(m_engine->IsPixReady())
+		pixels = m_engine->GetPixels().data();
+	float x, y;
+
     for (int i = 0; i < nSamples; ++i) {
 
-		/*++m_samps;
-		auto nFrame = static_cast<uint64_t>( 30.0 * static_cast<double>( m_samps) / sampleRate());
+		x = sc_wrap(pix_x[i], 0.0f, 1.0f)*(m_width-1);
+		y = sc_wrap(pix_y[i], 0.0f, 1.0f)*(m_height-1);
 
-		if (nFrame != m_prevFrame)
-		{
-			if (m_pWindow && (!glfwWindowShouldClose(m_pWindow)))
-			{
-				float ratio;
-				int width, height;
-				mat4x4 m, p, mvp;
+		const int srcIdx = 4 * (y * m_width + x);
 
-				glfwGetFramebufferSize(m_pWindow, &width, &height);
-				ratio = width / (float)height;
-
-				glViewport(0, 0, width, height);
-				glClear(GL_COLOR_BUFFER_BIT);
-
-				mat4x4_identity(m);
-				mat4x4_rotate_Z(m, m, (float)glfwGetTime());
-				mat4x4_ortho(p, -ratio, ratio, -1.f, 1.f, 1.f, -1.f);
-				mat4x4_mul(mvp, p, m);
-				
-				glUseProgram(program);
-				glUniformMatrix4fv(mvp_location, 1, GL_FALSE, (const GLfloat*)mvp);
-				glDrawArrays(GL_TRIANGLES, 0, 3);
-
-				glfwSwapBuffers(m_pWindow);
-				glfwPollEvents();
-			}
-			m_prevFrame = nFrame;
-
-		}
-		*/
-        outbuf[i] = input[i] * gain[i];
+		
+		if (pixels)
+			outbuf[i] = pixels[srcIdx] * gain[i];
+		else
+			outbuf[i] = 0;
     }
 }
 
