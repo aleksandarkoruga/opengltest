@@ -112,12 +112,12 @@ void OpenGLTest::next(int nSamples) {
 	
 	if(m_engine->IsPixReady())
 		pixels = m_engine->GetPixels().data();
-	float x, y;
+	int x, y;
 
     for (int i = 0; i < nSamples; ++i) {
 
-		x = sc_wrap(pix_x[i], 0.0f, 1.0f)*(m_width-1);
-		y = sc_wrap(pix_y[i], 0.0f, 1.0f)*(m_height-1);
+		x = static_cast<int>( std::floor(sc_wrap(pix_x[i], 0.0f, 1.0f)*(m_width-1)));
+		y = static_cast<int>(std::floor(sc_wrap(pix_y[i], 0.0f, 1.0f)*(m_height-1)));
 
 		const int srcIdx = 4 * (y * m_width + x);
 
