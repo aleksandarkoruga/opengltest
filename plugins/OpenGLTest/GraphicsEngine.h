@@ -8,9 +8,12 @@
 //#define TEXTURE_X 1080
 //#define TEXTURE_Y 1080
 
-
+#include <array>
 
 namespace scGraphics{
+	static std::atomic<bool> glfwInitializing{ false }; // Indicates if initialization is in progress
+	static std::atomic<bool> glfwInitialized{ false };  // Indicates if initialization succeeded
+
 
 	struct Vertex
 	{
@@ -114,8 +117,13 @@ public:
 	void CalculateOneFrame();
 	void SwapFBO();
 	void SetData(const float* buf, int nSamples);
-	const std::vector<float>& GetPixels() { return m_arrPixels; };
-	const bool IsPixReady() { return m_bPixReady; };
+	const float* GetPixels() const {
+		if (!m_bPixReady.load(std::memory_order_acquire)) return nullptr;
+
+		const int idx = m_readIdx.load(std::memory_order_acquire);
+		return (idx != -1) ? m_pixBuffers[idx].data() : nullptr;
+	}
+	
 private:
 	bool InitEngine();
 	void TerminateEngine();
@@ -150,8 +158,14 @@ protected:
 	std::vector<GLuint> m_textures;
 	bool m_bCurrentSwap; 
 
-	std::vector<float> m_arrPixels;
-	bool m_bPixReady;
+	//std::vector<float> m_arrPixels;
+	//bool m_bPixReady;
+	std::array<std::vector<float>, 3> m_pixBuffers; // Triple buffer
+	std::atomic<int> m_writeIdx{ 0 }; // Graphics thread writes here
+	std::atomic<int> m_readIdx{ -1 }; // Audio thread reads here (-1 = no data)
+	std::atomic<bool> m_bPixReady{ false }; // Initial flag for safety
+	
+	
 	//std::pair<GLuint, GLuint> m_frameBufferSwap;
 	//std::pair<GLuint, GLuint> m_textures; //output tex
 };

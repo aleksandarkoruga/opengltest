@@ -108,10 +108,11 @@ void OpenGLTest::next(int nSamples) {
     // simple gain function
 
 
-	const float* pixels = nullptr;
+	//const float* pixels = nullptr;
 	
-	if(m_engine->IsPixReady())
-		pixels = m_engine->GetPixels().data();
+	const auto* pixels = m_engine->GetPixels();
+//		pixels = m_engine->GetPixels();
+
 	int x, y;
 
     for (int i = 0; i < nSamples; ++i) {

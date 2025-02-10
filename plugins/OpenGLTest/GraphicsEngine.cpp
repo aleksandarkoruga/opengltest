@@ -1,4 +1,4 @@
-
+﻿
 #pragma once
 #include "GraphicsEngine.h"
 #include <functional>
@@ -64,7 +64,11 @@ namespace scGraphics{
 		m_frameBufferSwap({ (GLuint)0U, (GLuint)0U }),
 		m_textures({ (GLuint)0U, (GLuint)0U }),
 		m_bCurrentSwap(false),
-		m_arrPixels(std::vector<float>(widthBackBuffer* heightBackBuffer * 4,0)),
+		m_pixBuffers{  // Uniform initialization for std::array
+				  std::vector<float>(widthBackBuffer * heightBackBuffer * 4, 0.0f),
+				  std::vector<float>(widthBackBuffer * heightBackBuffer * 4, 0.0f),
+				  std::vector<float>(widthBackBuffer * heightBackBuffer * 4, 0.0f)
+					},
 		m_bPixReady(false)
 
 		
@@ -74,15 +78,11 @@ namespace scGraphics{
 	GraphicsEngine::~GraphicsEngine()
 	{
 		m_programState.store(PROGRAM_STATE::TERMINATE);
-		std::this_thread::sleep_for(std::chrono::milliseconds(60));
+		//std::this_thread::sleep_for(std::chrono::milliseconds(60));
 
-		
-		m_graphicsThread.join();
-
-
-		if (m_pWindow)
-			glfwDestroyWindow(m_pWindow);
-		glfwTerminate();
+		if (m_graphicsThread.joinable()) {
+			m_graphicsThread.join(); // Ensure thread finishes cleanup
+		}
 	}
 
 	void GraphicsEngine::RunEngine()
@@ -106,10 +106,11 @@ namespace scGraphics{
 				break;
 			}
 
-			if (m_programState.load()!=PROGRAM_STATE::TERMINATE)
-				std::this_thread::sleep_for(std::chrono::milliseconds(33));
-			else
+			if (m_programState.load()==PROGRAM_STATE::TERMINATE)
 				break;
+				//std::this_thread::sleep_for(std::chrono::milliseconds(33));
+			//else
+				//break;
 		}
 
 		TerminateEngine();
@@ -188,14 +189,25 @@ namespace scGraphics{
 			glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
 
 			glReadBuffer(GL_COLOR_ATTACHMENT0); // Ensure we read from color attachment 0
+
+			int currentWriteIdx = m_writeIdx.load(std::memory_order_relaxed);
 			glReadPixels(
 				0, 0,                     // Start position (lower-left corner)
 				m_width, m_height,     // Dimensions
 				GL_RGBA,                  // Format
 				GL_FLOAT,                 // Type
-				m_arrPixels.data()          // Destination buffer
+				m_pixBuffers[currentWriteIdx].data()         // Destination buffer
 			);
-			m_bPixReady = true;
+			int expectedReadIdx = m_readIdx.load(std::memory_order_relaxed);
+			if (expectedReadIdx != currentWriteIdx) 
+			{ 
+				m_readIdx.compare_exchange_strong(expectedReadIdx, currentWriteIdx); 
+			}      
+			// Cycle write index (0→1→2→0...)    
+			m_writeIdx.store((currentWriteIdx + 1) % 3, std::memory_order_relaxed);      
+			// Signal first valid frame (one-time)     
+			if (!m_bPixReady.load()) 
+				m_bPixReady.store(true);
 			checkOpenGLError();
 
 			glBindVertexArray(0);
@@ -295,7 +307,34 @@ namespace scGraphics{
 	{
 		glfwSetErrorCallback(error_callback);
 
-		if (glfwInit())
+		if (glfwInitialized.load(std::memory_order_acquire)) {
+			goto create_window;
+		}
+
+		// Try to start initialization
+		bool expected = false;
+		if (glfwInitializing.compare_exchange_strong(expected, true,
+			std::memory_order_acq_rel)) {
+			// This thread handles initialization
+			bool success = glfwInit();
+			glfwInitialized.store(success, std::memory_order_release);
+			glfwInitializing.store(false, std::memory_order_release);
+		}
+		else {
+			// Another thread is initializing. Wait until done.
+			while (glfwInitializing.load(std::memory_order_acquire)) {
+				std::this_thread::yield(); // Reduce CPU usage
+			}
+		}
+
+		if (!glfwInitialized.load(std::memory_order_acquire)) {
+			// Initialization failed globally; abort
+			return false;
+		}
+
+	create_window:
+
+		//if (glfwInit())
 		{
 			glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
 			glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
@@ -308,7 +347,7 @@ namespace scGraphics{
 			m_pWindow = glfwCreateWindow(640, 480, "Supercollider Renderer", NULL, NULL);
 			if (!m_pWindow)
 			{
-				glfwTerminate();
+				return false;
 			}
 			else
 			{
@@ -453,7 +492,8 @@ namespace scGraphics{
 				std::cout << "valid framebuffer: " << frameBuffer << std::endl;
 			}
 		*/
-		glDeleteFramebuffers(2, &m_frameBufferSwap[0]);
+		if (glIsFramebuffer(m_frameBufferSwap[0]))
+			glDeleteFramebuffers(2, &m_frameBufferSwap[0]);
 
 		/*
 		for (auto tex : m_textures)
@@ -461,7 +501,8 @@ namespace scGraphics{
 				std::cout << "valid texture: " << tex << std::endl;
 			}
 		*/
-		glDeleteTextures(2, &m_textures[0]);
+		if (glIsTexture(m_textures[0]))
+			glDeleteTextures(2, &m_textures[0]);
 
 		m_shader->ReleaseResources();
 		if (m_VBO && glIsBuffer(m_VBO))
@@ -471,7 +512,9 @@ namespace scGraphics{
 		if (m_EBO && glIsBuffer(m_EBO))
 			glDeleteBuffers(1, &m_EBO);
 	
-	
+		if (m_pWindow)
+			glfwDestroyWindow(m_pWindow);
+		//glfwTerminate();
 	}
 
 	Shader::Shader(std::string shaderFolderPath) :m_data({})
