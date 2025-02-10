@@ -5,8 +5,6 @@ Author: Aleksandar Koruga
 OpenGL render engine for supercollider.
 Check either c++ code or sc files for details, if you're looking for a compiled version, check https://github.com/aleksandarkoruga/public-extensions/tree/main/OpenGLTest
 
-Known issues: After failing to compile a shader, the sc server will crash.
-
 ### Requirements
 
 - CMake >= 3.5
