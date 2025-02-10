@@ -2,7 +2,10 @@
 
 Author: Aleksandar Koruga
 
-OpenGL first implementation
+OpenGL render engine for supercollider.
+Check either c++ code or sc files for details.
+
+Known issues: After failing to compile a shader, the sc server will crash.
 
 ### Requirements
 
