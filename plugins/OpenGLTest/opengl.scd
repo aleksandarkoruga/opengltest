@@ -1,26 +1,3 @@
-class:: OpenGLTest
-summary:: OpenGL render engine
-related:: TODO
-categories:: UGens>TODO
-
-description::
-
-OpenGL render engine - for details check code example
-
-
-classmethods::
-
-method::ar
-
-argument::TODO
-
-argument::TODO
-
-
-examples::
-
-code::
-
 (
 a={
 	arg amp=1;
@@ -51,5 +28,3 @@ a.set(\a1,0.1,\o1,0.1,\a2,0.5)
 
 a.free
 
-
-::

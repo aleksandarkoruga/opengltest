@@ -6,6 +6,14 @@ layout(location = 4) uniform sampler2D frame;
 
 layout(location = 0) out vec4 fragColor;  // Output to the framebuffer
 
+
+float grid(vec2 st, float res)
+{
+  vec2 grid = fract(st*res);
+  return 1.0-(step(res,grid.x) * step(res,grid.y));
+}
+
+
 void main() {
     // Calculate aspect ratios
     float texAspect = 1.0; // 1080x1080 is square
@@ -17,10 +25,11 @@ void main() {
 
     if (winAspect > texAspect) {
         // Window is wider than texture: add vertical bars
-        uv.x *= texAspect / winAspect;
+        uv.x *= winAspect / texAspect;
     } else {
         // Window is taller than texture: add horizontal bars
-        uv.y *= winAspect / texAspect;
+        uv.y *= texAspect / winAspect;
+        
     }
 
     uv = (uv + 1.0) * 0.5; // Convert back to [0,1]
@@ -34,6 +43,9 @@ void main() {
     //val.z =0;
     //val*=1.0; 
 
-    fragColor = vec4(clamp((data.xxx) ,0.0,1.0),1.0) ;
+   
+    float gridLines = clamp(grid((uv+vec2(0.5)+ 0.2 * data.zw) *200.0, 0.15),0.0,1.0)*0.2;
+    
+    fragColor = vec4(clamp((vec3(0,gridLines,gridLines)+(data.xzw)) ,0.0,1.0),1.0) ;
     fragColor += vec4(1) * pow(max(0.0, dot(normal, normalize(vec3(-3, 10, 3)))), 60.0);
 }

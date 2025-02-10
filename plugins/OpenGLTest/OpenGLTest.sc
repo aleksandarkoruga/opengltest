@@ -1,7 +1,10 @@
 OpenGLTest : UGen {
-	*ar { |input, gain|
+	*ar { |input, gain, x, y, path|
 		/* TODO */
-		^this.multiNew('audio', input, gain);
+		var file_args = Array.with(path.size, *path.asList.collect(_.ascii));
+		var input_args = [input, gain, x,y];
+		file_args.postln;
+		^this.multiNew('audio', *(input_args++file_args));
 	}
 	checkInputs {
 		/* TODO */

@@ -1,5 +1,7 @@
 #version 430 core
 
+//ported from https://www.shadertoy.com/view/wdtyDH
+
 layout(location = 0) uniform int ssboSize; // Size of the SSBO (number of elements)
 layout(location = 3) uniform vec2 resolution;
 layout(location = 4) uniform sampler2D previousFrame;
@@ -11,17 +13,17 @@ layout(std430, binding = 2) buffer DataBuffer {
 
 layout(location = 0) out vec4 fragColor;  // Output to the framebuffer
 
-
-
 // Wave equation parameters
-const float past = 0.0001;     
-const float nonlinear = 0.005;
 const float damping = 0.999; // Slight damping to prevent infinite energy
 const float delta = 1.0;
+const float space = 1.0;
 
 void main()
 {
-    vec2 coord = gl_FragCoord.xy / resolution;
+    vec2 onePix = 1.0 / resolution;
+    vec2 coord = gl_FragCoord.xy * onePix;
+
+    vec2 oPixS = onePix*space;
 
     // Read previous states (no clamping to [-1, 1] here)
     vec3 u_prev = texture(previousFrame, coord).rgb ;  // u(t-Δt)
@@ -31,17 +33,28 @@ void main()
     float pVel = u_prev.y;
 
     // Spatial derivatives (Laplacian)
-    float p_left = texture(previousFrame, coord - vec2(1.0 / resolution.x, 0.0)).x ;
-    float p_right = texture(previousFrame, coord + vec2(1.0 / resolution.x, 0.0)).x ;
-    float p_up = texture(previousFrame, coord + vec2(0.0, 1.0 / resolution.y)).x ;
-    float p_down = texture(previousFrame, coord - vec2(0.0, 1.0 / resolution.y)).x ;
+    float p_left = texture(previousFrame, coord - vec2(oPixS.x, 0.0)).x ;
+    float p_right = texture(previousFrame, coord + vec2(oPixS.x, 0.0)).x ;
+    float p_up = texture(previousFrame, coord + vec2(0.0, oPixS.y)).x ;
+    float p_down = texture(previousFrame, coord - vec2(0.0, oPixS.y)).x ;
   
+    if(coord.x < 2*onePix.x)
+        p_right= p_left ;
+        
+    if(coord.y < 2*onePix.y)
+        p_up= p_down  ;
+
+    if(coord.x > 1.0-2*onePix.x)
+        p_left= p_right ;
+
+    if(coord.y > 1.0-2*onePix.y)
+        p_down= p_up ;
 
      // Apply horizontal wave function
-    pVel += delta*0.25 * (-4.0 * pressure + p_right + p_left + p_up + p_down + u_prev2.y * past)  ;
+    pVel += delta*0.25 * (-4.0 * pressure + p_right + p_left + p_up + p_down )  ;
     
     // Change pressure by pressure velocity
-    pressure += delta * pVel + u_prev2.x * past + nonlinear*(cos(u_prev2.y*10.0));
+    pressure += delta * pVel ;
     
     // "Spring" motion. This makes the waves look more like water waves and less like sound waves.
     pVel -= 0.005 * delta * pressure;
@@ -61,49 +74,159 @@ void main()
     excitation = step(0.99,excitation);
     //float excitation = (data[index]) * 0.1;
     //excitation = excitation * float(coord.x < 0.51)*float(coord.x > 0.49)* float(coord.y < 0.51)*float(coord.y > 0.49);
-    pressure+=excitation;
+    pressure+=excitation*data[index];
     //x = pressure. y = pressure velocity. Z and W = X and Y gradient
     fragColor = vec4(pressure, pVel, (p_right - p_left) / 2.0, (p_up - p_down) / 2.0);
 }
 
 
+
+// RAYMARCHING // /////////////////////////////////////////////////
+// /////////////////////////////////////////////////
+// /////////////////////////////////////////////////
+// UNCOMMENT TO USE AND COMMENT THE main ABOVE/////////////////////////////////////////////////
 /*
-void mainOld()
-{
-    vec2 coord = gl_FragCoord.xy / resolution;
+// Camera
+const vec3 camPos = vec3(0.0, 0.0, 5.0);
+const vec3 camTarget = vec3(0.0, 0.0, 0.0);
+const float fov = 1.0;
 
-    // Read previous states (no clamping to [-1, 1] here)
-    vec3 u_prev = texture(previousFrame, coord).rgb ;  // u(t-Δt)
-    vec3 u_prev2 = texture(previousFrame2, coord).rgb ; // u(t-2Δt)
+// Lighting
+const vec3 lightDir = normalize(vec3(0.5, 1.0, 0.5));
 
-    // Spatial derivatives (Laplacian)
-    vec3 u_left = texture(previousFrame, coord - vec2(1.0 / resolution.x, 0.0)).rgb ;
-    vec3 u_right = texture(previousFrame, coord + vec2(1.0 / resolution.x, 0.0)).rgb ;
-    vec3 u_up = texture(previousFrame, coord + vec2(0.0, 1.0 / resolution.y)).rgb ;
-    vec3 u_down = texture(previousFrame, coord - vec2(0.0, 1.0 / resolution.y)).rgb ;
+// Constants
+const float MAX_DIST = 100.0;
+const float MIN_DIST = 0.001;
+const int MAX_STEPS = 256;
 
-    vec3 laplacian = (u_left + u_right + u_up + u_down - 4.0 * u_prev);
+// Basic SDFs
+float sdSphere(vec3 p, float r) {
+    return length(p) - r;
+}
 
-    // Wave equation update: u(t) = 2u(t-Δt) - u(t-2Δt) + c²Δt²/Δx² * laplacian(u)
-    vec3 u_new = 2.0 * u_prev - u_prev2 + (c * c * dt * dt / (dx * dx)) * laplacian;
+float sdBox(vec3 p, vec3 b) {
+    vec3 q = abs(p) - b;
+    return length(max(q, 0.0)) + min(max(q.x, max(q.y, q.z)), 0.0);
+}
 
-    // Apply damping to prevent infinite oscillations
-    u_new *= damping;
+float sdPlane(vec3 p, vec4 n) {
+    return dot(p, n.xyz) + n.w;
+}
 
-    // Add excitation from SSBO (optional)
-    int index = int(gl_FragCoord.x / resolution.x * ssboSize);
-    //float excitation = abs( (coord.y-0.5) - 0.0*data[index]);
-    //excitation=(1.0-clamp(excitation, 0.0, 1.0));
-    //excitation = step(0.99,excitation);
-    float excitation = (data[index]) * 0.1;
-    excitation = excitation * float(coord.x < 0.51)*float(coord.x > 0.49)* float(coord.y < 0.51)*float(coord.y > 0.49);
+// Fractals
+float mengerSponge(vec3 p) {
+    float d = sdBox(p, vec3(1.0));
+    float s = 1.0;
+    for (int i = 0; i < 4; i++) {
+        vec3 a = mod(p * s, 2.0) - 1.0;
+        s *= 3.0;
+        vec3 r = 1.0 - 3.0 * abs(a);
+        float c = sdBox(r, vec3(1.0)) / s;
+        d = max(d, c);
+    }
+    return d;
+}
 
+float mandelbulb(vec3 p) {
+    vec3 z = p;
+    float dr = 1.0;
+    float r = 0.0;
+    for (int i = 0; i < 10; i++) {
+        r = length(z);
+        if (r > 2.0) break;
+        float theta = acos(z.z / r);
+        float phi = atan(z.y, z.x);
+        dr = pow(r, 8.0) * 8.0 * dr + 1.0;
+        float zr = pow(r, 8.0);
+        theta = theta * 8.0;
+        phi = phi * 8.0;
+        z = zr * vec3(sin(theta) * cos(phi), sin(phi) * sin(theta), cos(theta));
+        z += p;
+    }
+    return 0.5 * log(r) * r / dr;
+}
 
-    u_new = (float(abs(excitation)>=0.0001)*vec3(excitation*0.01)) + (   u_new*(float(abs(excitation)<0.0001))  );
+float apollonianGasket(vec3 p) {
+    float scale = 2.0;
+    float d = sdSphere(p, 1.0);
+    for (int i = 0; i < 5; i++) {
+        p = -1.0 + 2.0 * fract(0.5 * p + 0.5);
+        float r = length(p);
+        if (r < 1.0) {
+            p /= r * r;
+            d = min(d, sdSphere(p, 1.0 / scale));
+        }
+        scale *= 2.0;
+    }
+    return d;
+}
 
-    //u_new += 0.01*vec3( cos(laplacian.y*3.1*2*3.14),cos(laplacian.z*2.4*2*3.14),cos(laplacian.x*2*3.14)  );
+// Scene mapping
+float map(vec3 p) {
+    float d = MAX_DIST;
 
-    // Store the new state in [-1, 1] (no clamping here)
-    fragColor = vec4(u_new,1.0);
+    // Example: Combine shapes and fractals
+    d = min(d, sdSphere(p - vec3(0.0, 0.0, -5.0), 1.0)); // Sphere
+    d = min(d, sdBox(p - vec3(2.0, 0.0, -5.0), vec3(0.5))); // Box
+    d = min(d, mengerSponge(p - vec3(-2.0, 0.0, -5.0))); // Menger Sponge
+    d = min(d, mandelbulb(p - vec3(0.0, 2.0, -5.0))); // Mandelbulb
+    d = min(d, apollonianGasket(p - vec3(0.0, -2.0, -5.0))); // Apollonian Gasket
+
+    return d;
+}
+
+// Raymarching
+float rayMarch(vec3 ro, vec3 rd) {
+    float dist = 0.0;
+    for (int i = 0; i < MAX_STEPS; i++) {
+        vec3 p = ro + rd * dist;
+        float d = map(p);
+        if (d < MIN_DIST || dist > MAX_DIST) break;
+        dist += d;
+    }
+    return dist;
+}
+
+// Normal calculation
+vec3 calcNormal(vec3 p) {
+    const float eps = 0.001;
+    float d = map(p);
+    vec3 n = d - vec3(
+        map(p - vec3(eps, 0.0, 0.0)),
+        map(p - vec3(0.0, eps, 0.0)),
+        map(p - vec3(0.0, 0.0, eps))
+    );
+    return normalize(n);
+}
+
+// Lighting
+vec3 getLight(vec3 p, vec3 rd) {
+    vec3 normal = calcNormal(p);
+    float diff = max(dot(normal, lightDir), 0.0);
+    vec3 reflectDir = reflect(-lightDir, normal);
+    float spec = pow(max(dot(rd, reflectDir), 0.0), 32.0);
+    return vec3(diff + spec);
+}
+
+// Main
+void main() {
+    vec2 uv = (gl_FragCoord.xy - 0.5 * resolution.xy) / resolution.y;
+
+    // Camera setup
+    vec3 ro = camPos;
+    vec3 rd = normalize(vec3(uv, -fov));
+
+    // Raymarch
+    float dist = rayMarch(ro, rd);
+    vec3 p = ro + rd * dist;
+
+    // Lighting
+    vec3 color = vec3(0.0);
+    if (dist < MAX_DIST) {
+        color = getLight(p, rd);
+    }
+
+    fragColor = vec4(color, 1.0);
 }
 */
+
