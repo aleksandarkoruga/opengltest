@@ -95,8 +95,10 @@ namespace scGraphics{
 			{
 			case PROGRAM_STATE::START:
 			{
-				InitEngine();
-				m_programState.store(PROGRAM_STATE::RUN);
+				if(InitEngine())
+					m_programState.store(PROGRAM_STATE::RUN);
+				else
+					m_programState.store(PROGRAM_STATE::TERMINATE);
 			}
 			break;
 			case PROGRAM_STATE::RUN:
@@ -369,7 +371,9 @@ namespace scGraphics{
 
 				checkOpenGLError();
 
-				m_shader->Compile();
+				if (!m_shader->Compile()) 			
+					return false;
+
 
 				checkOpenGLError();
 
@@ -475,7 +479,7 @@ namespace scGraphics{
 				
 
 				checkOpenGLError();
-
+				return true;
 			}
 		}
 
@@ -590,21 +594,27 @@ namespace scGraphics{
 		memcpy(m_data.data(), buf, nSamples * sizeof(float));
 	}
 
-	void Shader::Compile()
+	bool Shader::Compile()
 	{
-		CompileVertexShader(m_vertexShaderText, m_vertexShader);
+		bool valid = true;
+		valid &= CompileVertexShader(m_vertexShaderText, m_vertexShader);
 		checkOpenGLError();
-		CompileFragmentShader(m_fragmentShaderText, m_fragmentShader);
+		valid &= CompileFragmentShader(m_fragmentShaderText, m_fragmentShader);
 		checkOpenGLError();
-		CompileProgram(m_shaderProgram, m_vertexShader, m_fragmentShader );
+		valid &= CompileProgram(m_shaderProgram, m_vertexShader, m_fragmentShader );
 		checkOpenGLError();
 
-		CompileVertexShader(m_vertexShaderPostText, m_vertexPostShader);
+		valid &= CompileVertexShader(m_vertexShaderPostText, m_vertexPostShader);
 		checkOpenGLError();
-		CompileFragmentShader(m_fragmentShaderPostText, m_fragmentPostShader);
+		valid &= CompileFragmentShader(m_fragmentShaderPostText, m_fragmentPostShader);
 		checkOpenGLError();
-		CompileProgram(m_shaderPostProgram, m_vertexPostShader, m_fragmentPostShader);
+		valid &= CompileProgram(m_shaderPostProgram, m_vertexPostShader, m_fragmentPostShader);
 		checkOpenGLError();
+
+		if (!valid)
+			ReleaseResources();
+		return valid;
+
 
 	}
 
@@ -657,7 +667,7 @@ namespace scGraphics{
 		return compileStatus == GL_TRUE;
 	}
 
-	void Shader::CompileProgram(GLuint& program, GLuint& vert, GLuint& frag)
+	bool Shader::CompileProgram(GLuint& program, GLuint& vert, GLuint& frag)
 	{
 		program = glCreateProgram();
 		glAttachShader(program, vert);
@@ -684,7 +694,7 @@ namespace scGraphics{
 		else {
 			std::cout << "Shader program linked successfully!" << std::endl;
 		}
-
+		return static_cast<bool>(linkStatus);
 	}
 
 	void Shader::CommitData()

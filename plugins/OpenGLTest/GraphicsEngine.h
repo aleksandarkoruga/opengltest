@@ -37,7 +37,7 @@ namespace scGraphics{
 		inline const std::vector<Index>& GetIndexArray() { return m_indices; };
 		inline GLuint* GetSSBO() { return &m_ssbo; };
 		void SetData(const float* buf, int nSamples);
-		void Compile();
+		bool Compile();
 		GLint GetUniformLocation(const GLchar* name);
 		GLint GetAttribLocation(const GLchar* name);
 		void SetVertexBufferDynamic(const std::vector<Vertex>& vertices);
@@ -76,7 +76,7 @@ namespace scGraphics{
 
 		bool CompileVertexShader(std::string& text, GLuint& vert);
 		bool CompileFragmentShader(std::string& text, GLuint& vert);
-		void CompileProgram(GLuint& program, GLuint& vert, GLuint& frag);
+		bool CompileProgram(GLuint& program, GLuint& vert, GLuint& frag);
 		void ReleaseShader();
 		std::string readShaderFile(const std::string& fileName);
 		//void ExchangeVertexShader();
