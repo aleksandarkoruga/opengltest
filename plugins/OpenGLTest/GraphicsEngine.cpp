@@ -57,7 +57,7 @@ namespace scGraphics{
 		m_vPosLocation(0),
 		//m_vColLocation(0),
 		m_shader(nullptr),
-		m_bSSBO({MEMSTATE::FINISHED}),
+		m_bSSBO({MEMSTATE::EMPTY}),
 		m_VBO(0),
 		m_VAO(0),
 		m_EBO(0),
@@ -178,8 +178,10 @@ namespace scGraphics{
 			GLint resolutionLocation = glGetUniformLocation(m_shader->GetShaderProgram(), "resolution");
 			glUniform2f(resolutionLocation, static_cast<float>(m_width), static_cast<float>(m_height)  );
 
-			if(m_bSSBO.load() == MEMSTATE::READY)
+			auto expected = MEMSTATE::READY;
+			if(m_bSSBO.compare_exchange_weak(expected, MEMSTATE::READING))
 				m_shader->CommitData();
+			m_bSSBO.store(MEMSTATE::READY);
 
 			checkOpenGLError();
 			//glUniformMatrix4fv(m_mvpLocation, 1, GL_FALSE, (const GLfloat*)mvp);
@@ -283,7 +285,7 @@ namespace scGraphics{
 			checkOpenGLError();
 
 			SwapFBO();
-			m_bSSBO.store(MEMSTATE::FINISHED);
+			//m_bSSBO.store(MEMSTATE::FINISHED);
 		}
 		
 	}
@@ -297,7 +299,13 @@ namespace scGraphics{
 
 	void GraphicsEngine::SetData(const float* buf, int nSamples)
 	{
-		if (m_bSSBO.load() == MEMSTATE::FINISHED && m_shader!=nullptr && m_programState.load()==PROGRAM_STATE::RUN)
+		if (!m_shader && m_programState.load() != PROGRAM_STATE::RUN)
+			return;
+
+		auto expected = MEMSTATE::READY;
+		auto alternative = MEMSTATE::EMPTY;
+		if ((m_bSSBO.compare_exchange_weak(expected, MEMSTATE::WRITING, std::memory_order_acquire)) 
+			|| (m_bSSBO.compare_exchange_weak(alternative, MEMSTATE::WRITING, std::memory_order_acquire)))
 		{
 			m_shader->SetData(buf, nSamples);
 			

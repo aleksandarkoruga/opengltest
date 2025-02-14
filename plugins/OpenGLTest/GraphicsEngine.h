@@ -149,7 +149,7 @@ protected:
 	
 
 	std::unique_ptr<Shader> m_shader;
-	enum class MEMSTATE {READY,FINISHED};
+	enum class MEMSTATE {READY,READING,WRITING,EMPTY};
 	std::atomic<MEMSTATE> m_bSSBO;
 	
 	unsigned int m_VBO, m_VAO, m_EBO;
