@@ -6,7 +6,7 @@
 
 (a={
 	var out;
-
+	var input;
 	//var input = PlayBuf.ar(1,~samp,loop:1); //UNCOMMENT IF YOU LOADED A SAMPLE
 
 	//read horizontally

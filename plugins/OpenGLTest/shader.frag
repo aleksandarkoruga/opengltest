@@ -1,23 +1,32 @@
+// //////////////////////////////////////////////////////////////////////
+// DO NOT CHANGE
+
 #version 430 core
 
-//ported from https://www.shadertoy.com/view/wdtyDH
 
 layout(location = 0) uniform int ssboSize; // Size of the SSBO (number of elements)
 layout(location = 3) uniform vec2 resolution;
 layout(location = 4) uniform sampler2D previousFrame;
 layout(location = 5) uniform sampler2D previousFrame2;
 
+layout(location = 6) uniform int     lastWriteIdx; //last write index from audio thread to ssbo DataBuffer
 layout(std430, binding = 2) buffer DataBuffer {
     float data[];
 };
 
 layout(location = 0) out vec4 fragColor;  // Output to the framebuffer
 
+// //////////////////////////////////////////////////////////////////////
+
+
 // Wave equation parameters
 const float damping = 0.999; // Slight damping to prevent infinite energy
 const float delta = 1.0;
 const float space = 1.0;
+const float sideAtten = 1.0;
+const float pi2=6.28318530718;
 
+//ported from https://www.shadertoy.com/view/wdtyDH
 void main()
 {
     vec2 onePix = 1.0 / resolution;
@@ -37,19 +46,19 @@ void main()
     float p_right = texture(previousFrame, coord + vec2(oPixS.x, 0.0)).x ;
     float p_up = texture(previousFrame, coord + vec2(0.0, oPixS.y)).x ;
     float p_down = texture(previousFrame, coord - vec2(0.0, oPixS.y)).x ;
-  
+  /*
     if(coord.x < 2*onePix.x)
-        p_right= p_left ;
+        p_right= sideAtten*p_left ;
         
     if(coord.y < 2*onePix.y)
-        p_up= p_down  ;
+        p_up= sideAtten*p_down  ;
 
     if(coord.x > 1.0-2*onePix.x)
-        p_left= p_right ;
+        p_left= sideAtten*p_right ;
 
     if(coord.y > 1.0-2*onePix.y)
-        p_down= p_up ;
-
+        p_down= sideAtten*p_up ;
+*/
      // Apply horizontal wave function
     pVel += delta*0.25 * (-4.0 * pressure + p_right + p_left + p_up + p_down )  ;
     
@@ -67,13 +76,17 @@ void main()
     
     
 
-    // Add excitation from SSBO (optional)
-    int index = int(gl_FragCoord.x / resolution.x * ssboSize);
-    float excitation = abs( (coord.y-0.5) - 0.25*data[index]);
-    excitation=(1.0-clamp(excitation, 0.0, 1.0));
-    excitation = step(0.99,excitation);
-    //float excitation = (data[index]) * 0.1;
-    //excitation = excitation * float(coord.x < 0.51)*float(coord.x > 0.49)* float(coord.y < 0.51)*float(coord.y > 0.49);
+    // Add excitation from SSBO 
+    int index = int(coord.x * ssboSize);
+
+    //float moIdx = mod(float(index)+lastWriteIdx,float(ssboSize));
+
+    float excitation =  smoothstep(0.0,1.0,1.0- 500.0* abs( (coord.y-0.5)));     //abs( (coord.y-0.5) - 0.25*data[index]);
+    
+    
+    
+    //cos(coord.x*pi2+ (coord.y-0.5) * float(resolution.y)*data[index]  )
+    
     pressure+=excitation*data[index];
     //x = pressure. y = pressure velocity. Z and W = X and Y gradient
     fragColor = vec4(pressure, pVel, (p_right - p_left) / 2.0, (p_up - p_down) / 2.0);
