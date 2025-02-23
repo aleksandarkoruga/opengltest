@@ -28,6 +28,14 @@ Clone the project:
     mkdir build
     cd build
 
+Get GLM, GLFW, GLUT, GLEW libraries 
+
+update CMakeLists include directories:
+    PATH_TO_GLM
+    PATH_TO_GLFW
+    PATH_TO_GLEW
+    PATH_TO_GLUT
+
 Then, use CMake to configure and build it:
 
     cmake .. -DCMAKE_BUILD_TYPE=Release
