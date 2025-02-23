@@ -1,3 +1,10 @@
+TODO: 
+- uniform values control from sc - dynamically assign uniforms from input control rate array
+- specify vertex array from buffer
+- Buffer variations of plugin ->              Audio in - Buffer out | Buffer In - Buffer Out | Buffer In - Audio Out
+- Maybe add visualizer only possibility?      Audio In - No out | Buffer In - No Out
+- compute shaders
+
 # OpenGLTest
 
 Author: Aleksandar Koruga
