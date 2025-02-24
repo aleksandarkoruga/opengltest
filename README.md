@@ -1,3 +1,10 @@
+# OpenGLTest
+
+Author: Aleksandar Koruga
+
+OpenGL render engine for supercollider.
+Check either c++ code or sc files for details, if you're looking for a compiled version, check https://github.com/aleksandarkoruga/public-extensions/tree/main/OpenGLTest
+
 TODO: 
 - uniform values control from sc - dynamically assign uniforms from input control rate array
 - specify vertex array from buffer
@@ -7,12 +14,6 @@ TODO:
 - Maybe add visualizer only possibility?      Audio In - No out | Buffer In - No Out
 - compute shaders
 
-# OpenGLTest
-
-Author: Aleksandar Koruga
-
-OpenGL render engine for supercollider.
-Check either c++ code or sc files for details, if you're looking for a compiled version, check https://github.com/aleksandarkoruga/public-extensions/tree/main/OpenGLTest
 
 ### Requirements
 
