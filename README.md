@@ -5,10 +5,24 @@ Author: Aleksandar Koruga
 OpenGL render engine for supercollider.
 Check either c++ code or sc files for details, if you're looking for a compiled version, check https://github.com/aleksandarkoruga/public-extensions/tree/main/OpenGLTest
 
+TODO: 
+- uniform values control from sc - dynamically assign uniforms from input control rate array
+- specify vertex array from buffer
+- camera control - position, lookat
+  
+- Buffer variations of plugin ->              Audio in - Buffer out | Buffer In - Buffer Out | Buffer In - Audio Out
+- Maybe add visualizer only possibility?      Audio In - No out | Buffer In - No Out
+- compute shaders
+
+
 ### Requirements
 
 - CMake >= 3.5
 - SuperCollider source code
+- GLM
+- GLFW
+- GLUT
+- GLEW
 
 ### Building
 
@@ -18,6 +32,14 @@ Clone the project:
     cd opengltest
     mkdir build
     cd build
+
+Get GLM, GLFW, GLUT, GLEW libraries 
+
+update CMakeLists include directories:
+    PATH_TO_GLM
+    PATH_TO_GLFW
+    PATH_TO_GLEW
+    PATH_TO_GLUT
 
 Then, use CMake to configure and build it:
 

@@ -9,7 +9,7 @@
 cmake_minimum_required(VERSION 3.5)
 set(project_name "OpenGLTest")
 set(CMAKE_MODULE_PATH ${CMAKE_SOURCE_DIR}/cmake_modules ${CMAKE_MODULE_PATH})
-set(CMAKE_CXX_STANDARD 11)
+set(CMAKE_CXX_STANDARD 17)
 
 ####################################################################################################
 # load modules
@@ -82,6 +82,49 @@ sc_add_server_plugin(
     "${OpenGLTest_sc_files}"
     "${OpenGLTest_schelp_files}"
 )
+
+# OPENGL
+
+# Include GLM, GLFW, GLEW, GLUT libraries
+
+# Include directories
+target_include_directories(OpenGLTest PRIVATE
+    PATH_TO_GLM
+    PATH_TO_GLFW/include
+    PATH_TO_GLEW/include
+    PATH_TO_GLUT/include
+)
+
+# Link directories
+target_link_directories(OpenGLTest PRIVATE
+    PATH_TO_GLFW/lib
+    PATH_TO_GLEW/lib
+    PATH_TO_GLUT/lib
+)
+
+# Platform-specific linking
+if(WIN32)
+    # Windows-specific libraries
+    target_link_libraries(OpenGLTest PRIVATE 
+        glfw3.lib 
+        glew32.lib 
+        glut
+    )
+elseif(UNIX AND NOT APPLE)
+    # Linux-specific libraries
+    target_link_libraries(OpenGLTest PRIVATE 
+        glfw 
+        GLEW 
+        GLUT
+    )
+elseif(APPLE)
+    # macOS-specific libraries
+    target_link_libraries(OpenGLTest PRIVATE 
+        glfw 
+        GLEW 
+        GLUT
+    )
+endif()
 
 # End target OpenGLTest
 ####################################################################################################
