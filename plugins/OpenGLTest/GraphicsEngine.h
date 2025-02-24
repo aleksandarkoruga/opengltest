@@ -21,6 +21,7 @@ public:
 	void RunEngine();
 	void CalculateOneFrame();
 	void SetData(const float* buf, const int& cpyIdx);
+
 	const float* GetPixels() const {
 		if (!m_bPixReady.load(std::memory_order_acquire)) return nullptr;
 
@@ -49,7 +50,9 @@ public:
 
 		return (idx != -1) ? m_pixBuffers[idx].data() : nullptr;
 	}
+	
 	const float* GetPrevPixels() const {
+		
 		if (!m_bPixReady.load(std::memory_order_acquire)) return nullptr;
 
 		const int lastIdx = m_lastReadIdx.load(std::memory_order_acquire);

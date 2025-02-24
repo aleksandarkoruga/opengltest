@@ -76,19 +76,28 @@ namespace scGraphics {
 	bool Shader::Compile()
 	{
 		bool valid = true;
-		valid &= CompileVertexShader(m_vertexShaderText, m_vertexShader);
-		checkOpenGLError();
-		valid &= CompileFragmentShader(m_fragmentShaderText, m_fragmentShader);
-		checkOpenGLError();
-		valid &= CompileProgram(m_shaderProgram, m_vertexShader, m_fragmentShader);
-		checkOpenGLError();
 
-		valid &= CompileVertexShader(m_vertexShaderPostText, m_vertexPostShader);
-		checkOpenGLError();
-		valid &= CompileFragmentShader(m_fragmentShaderPostText, m_fragmentPostShader);
-		checkOpenGLError();
-		valid &= CompileProgram(m_shaderPostProgram, m_vertexPostShader, m_fragmentPostShader);
-		checkOpenGLError();
+		valid &= (m_vertexShaderText != "") && (m_fragmentShaderText != "") && (m_vertexShaderPostText != "") && (m_fragmentShaderPostText != "");
+
+		if (valid) {
+			valid &= CompileVertexShader(m_vertexShaderText, m_vertexShader);
+			checkOpenGLError();
+			valid &= CompileFragmentShader(m_fragmentShaderText, m_fragmentShader);
+			checkOpenGLError();
+			valid &= CompileProgram(m_shaderProgram, m_vertexShader, m_fragmentShader);
+			checkOpenGLError();
+
+			valid &= CompileVertexShader(m_vertexShaderPostText, m_vertexPostShader);
+			checkOpenGLError();
+			valid &= CompileFragmentShader(m_fragmentShaderPostText, m_fragmentPostShader);
+			checkOpenGLError();
+			valid &= CompileProgram(m_shaderPostProgram, m_vertexPostShader, m_fragmentPostShader);
+			checkOpenGLError();
+		}
+		else 
+		{
+			std::cout << "failed to open shader file.";
+		}
 
 		if (!valid)
 			ReleaseResources();
@@ -222,7 +231,7 @@ namespace scGraphics {
 	{
 		std::ifstream file(fileName); // Open the file
 		if (!file.is_open()) { // Check if the file is successfully opened
-			throw std::runtime_error("Unable to open the file: " + fileName);
+			return "";//std::cout("Unable to open the file: " + fileName);
 		}
 
 		std::stringstream buffer;
