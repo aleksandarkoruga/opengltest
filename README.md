@@ -19,6 +19,10 @@ TODO:
 
 - CMake >= 3.5
 - SuperCollider source code
+- GLM
+- GLFW
+- GLUT
+- GLEW
 
 ### Building
 
