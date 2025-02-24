@@ -111,8 +111,6 @@ namespace scGraphics{
 
 		TerminateEngine();
 		
-
-
 	}
 	
 	void GraphicsEngine::CalculateOneFrame()
@@ -322,15 +320,6 @@ namespace scGraphics{
 
 				m_bSSBO.store(MEMSTATE::READY);
 			}
-
-			
-			
-
-
-
-			
-
-			
 		}
 	}
 	bool GraphicsEngine::InitEngine()
@@ -510,7 +499,6 @@ namespace scGraphics{
 				return true;
 			}
 		}
-
 
 		return false;
 	}
